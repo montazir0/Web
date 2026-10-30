@@ -1,0 +1,6 @@
+{
+  "name": "Vortex Network Control Center",
+  "description": "Enterprise-grade Network Control Center and Outbound Windows Local Agent management platform with zero fake telemetry and cryptographic verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,303 @@
+VORTEX NETWORK CONTROL CENTER v2.0
+الخريطة الهندسية التنفيذية النهائية
+Zero Fake Telemetry • Zero Fake Operations • Fail Closed
+
+حالة الوثيقة
+مرجع نهائي للتنفيذ والمراجعة والاختبار. لا تُعد أي وظيفة "منفذة" إلا بعد اجتياز اختبار القبول المرتبط بها. الميزات التي تحتاج جهازًا فعليًا تبقى Pending Device Validation.
+
+المسار المعتمد: C:\VortexNetworkCenter
+المنصات المستهدفة: Windows 10/11 • Windows PowerShell 5.1 • Python 3.10+
+المراجع الداخلية: الملفات السبعة المرفقة بالمشروع، مع اعتماد الأحدث والأكثر تحديدًا عند التعارض.
+ 
+1. الملخص التنفيذي
+تهدف هذه الخريطة إلى إعادة بناء المشروع على أساس قابل للتحقق، مع الحفاظ على سهولة التثبيت عبر الحافظة، لكن بعد إضافة فحص AST والنسخ الاحتياطي الموثق والاختبارات الإلزامية. المرجع التنفيذي الأعلى هو المتطلبات الأمنية والتصحيحات الحديثة، أما الكود الحالي فهو نقطة انطلاق تحتاج إعادة هندسة وليس نسخة معتمدة.
+المبدأ الحاكم
+لا نجاح بلا دليل. لا قياس بلا مصدر. لا Rollback بلا تحقق. لا Provider بلا Fingerprint ومصادقة وParser مختبر. لا أسرار خارج DPAPI أو الذاكرة المؤقتة المراقبة.
+
+•	عدم لمس VortexAI أو أي عملية Python لا يملكها المضيف الحالي.
+•	فصل اتصال Wi-Fi المحفوظ عن الاتصال ببيانات اعتماد جديدة.
+•	منع قيم ONT/NanoStation الوهمية؛ Ping يعني Reachability فقط.
+•	إرجاع NOT_IMPLEMENTED للوظائف غير المنفذة وإخفاء أزرارها.
+•	تشغيل PreBuild قبل بناء EXE، وPostBuild بعده، ومنع الإطلاق عند أي فشل.
+2. حوكمة المصادر وحسم التعارضات
+الأولوية	المصدر/المبدأ	القرار
+1	الأمان والصدق التقني	يتغلب على أي كود قديم أو سلوك مريح لكنه غير موثوق.
+2	التعديل.txt والجديد.txt	المرجع التنفيذي الأحدث للتثبيت والأمان وWi-Fi والاختبارات.
+3	نص ملصق(7).txt	مرجع المتطلبات الوظيفية والمعمارية وتجربة المستخدم.
+4	خريطة العمل.txt	أساس شجرة المشروع، مع إضافة Registry وSchemas وTests.
+5	مستند نصي جديد.txt	قاعدة الكود الحالية فقط؛ تخضع لإعادة كتابة مواضع الخطر.
+6	النمط القديم.txt	تُعتمد منه فكرة التشغيل السهل عبر الحافظة فقط.
+7	مرجع الراوتر والنانو	مرجع حقول وحدود، لا دليل Capability أو دعم موديل.
+
+3. الحالة الواقعية للوظائف
+الفئة	التعريف	أمثلة
+Existing - Needs Validation	موجودة في الكود لكن لا تُعتمد قبل الاختبارات	قراءة Windows، الفحص، بعض التشخيص.
+Rebuild Required	تنفيذ حالي غير موثوق أو غير آمن	Wi-Fi verify، Vault، TaskManager، Repair.
+Planned	مطلوبة ولم تُثبت بعد	ProviderRegistry، Schemas، Device tests.
+Read-only	لا تغيّر حالة الجهاز	Generic discovery، ISP profile، reachability.
+NOT_IMPLEMENTED	واجهة عقدية فقط بلا ادعاء نجاح	Router apply/rollback/reboot غير المختبر.
+Prohibited	غير مسموحة	تخمين كلمات مرور، تجاوز حماية، تعديل OLT fields.
+
+4. المتطلبات الموحدة الحاكمة
+المعرف	المتطلب
+REQ-CORE-001	المسار ثابت C:\VortexNetworkCenter، ودعم Windows 10/11 وPowerShell 5.1 وPython 3.10+.
+REQ-CORE-002	منع لمس VortexAI أو عمليات Python العامة؛ إدارة PID الذي أنشأه المضيف فقط.
+REQ-CORE-003	أي Telemetry غير متاحة تعاد null مع verified=false وsource وtimestamp.
+REQ-INSTALL-001	أمر Clipboard قصير: Get-Clipboard -Raw، تنظيف محدود، AST، UTF-8 no BOM، SHA-256 كامل.
+REQ-INSTALL-002	كشف التثبيت السابق قبل إنشاء المجلدات؛ Backup لـ backend/frontend/config مع Manifest verified.
+REQ-SEC-001	DPAPI حصري، لا Base64 fallback، ولا استبدال Vault لا يمكن فكّه.
+REQ-SEC-002	كل كتابة حساسة ذرية: temp + flush + fsync + os.replace.
+REQ-SEC-003	Redaction شامل للأسرار في Logs وtechnicalDetails وExports.
+REQ-API-001	127.0.0.1 فقط، منفذ ديناميكي، Tokens، CSRF، compare_digest، no-store.
+REQ-WIFI-001	Lock قبل Attempt، والطلب المتداخل يعيد ATTEMPT_IN_PROGRESS.
+REQ-WIFI-002	connect_saved_profile مستقل كليًا عن connect_with_new_credentials.
+REQ-WIFI-003	Profile اختبار _vortex_verify_<attemptId>، ولا يستخدم SSID اسمًا مؤقتًا.
+REQ-WIFI-004	CONNECTED_VERIFIED يحتاج Profile/SSID/BSSID/IP/Gateway وعدم AUTH_FAILED.
+REQ-WIFI-005	عند غياب دليل WLAN يرجع UNVERIFIED_RESULT، لا AUTHENTICATION_FAILED افتراضيًا.
+REQ-ROLLBACK-001	rollbackAvailable=true فقط بعد تحقق استعادة فعلي، لا لمجرد وجود Backup.
+REQ-DEVICE-001	Provider غير معروف Read-only؛ العمليات غير المنفذة تعيد NOT_IMPLEMENTED.
+REQ-UI-001	IE11/ES5، لا inline dynamic onclick، واستخدام createElement/textContent/addEventListener.
+REQ-TEST-001	كل متطلب له اختبار قبول؛ لا Release دون PreBuild/PostBuild ناجحين.
+
+5. شجرة المشروع النهائية
+تُعتمد الشجرة التالية. حالة ملفات الإعدادات هي "موجودة وتحتاج Schema Validation" وليست "سليمة" تلقائيًا.
+C:\VortexNetworkCenter\
+├── Install-Or-Update-VNC.ps1
+├── VortexNetworkCenter.exe
+├── Launch-VortexNetworkCenter.bat
+├── Uninstall-VortexNetworkCenter.ps1
+├── requirements.txt
+├── backup\pre_update_<timestamp>\manifest.json
+├── config\
+│   ├── settings.json
+│   ├── settings.schema.json
+│   ├── isp_profile.json
+│   ├── isp_profile.schema.json
+│   ├── devices_vault.dat
+│   ├── python_bin.txt
+│   └── server_port.txt
+├── logs\audit_log.json, backend_stderr.log
+├── exports\
+├── temp\
+├── backend\
+│   ├── vnc_backend.py
+│   ├── core\ result_models.py, security.py, credential_store.py, audit.py, task_manager.py, api_server.py
+│   ├── providers\ provider_registry.py, windows_network.py, router_base.py, openwrt.py, mikrotik.py, tplink.py, ubiquiti_airos.py, ont_base.py
+│   └── services\ capabilities.py, discovery.py, diagnostics.py, repair_engine.py, backup_restore.py, monitoring.py
+├── frontend\ index.html, styles\, js\
+└── tests\ unit\, integration\, prebuild_suite.py, postbuild_checks.ps1, device_test_plan.md
+6. المعمارية ودورة الحياة
+1.	Installer يتحقق من النص، يأخذ Backup متحققًا، يكتب الملفات، يشغّل PreBuild، يبني EXE ثم يشغّل PostBuild.
+2.	EXE يطلق Python كعملية ابن، يحتفظ بالـ PID، يراقب stderr، وينتظر server_port.txt ثم /api/health.
+3.	Backend ينشئ Tokens في الذاكرة، يربط 127.0.0.1:0، ويكتب port file ذريًا.
+4.	Frontend يحصل على الرموز عند تقديم index.html ويستخدم XHR محليًا فقط.
+5.	Shutdown محمي بـ Session + CSRF + Host nonce، ويُنفذ من خيط منفصل.
+6.	المضيف ينتظر إغلاقًا منظمًا حتى 5 ثوانٍ، ثم يستخدم Kill للعملية التابعة فقط كحل أخير ويسجل الإغلاق القسري.
+قيد معماري
+IE11 WebBrowser يُقبل للإصدار الحالي فقط. يسجل كدين تقني مرتفع، ويُقترح WebView2 في إصدار لاحق دون تغيير نطاق v2.0.
+
+7. عقد API وحماية الطلبات
+كل API باستثناء /api/health يعيد عقدًا موحدًا، وتُمرر technicalDetails على Redaction قبل الإرجاع. يُستخدم حد 64 KB كقرار نهائي موحد.
+Method	Path	الغرض	الحماية	المخرج
+GET	/api/health	جاهزية فقط	Localhost	200 healthy
+GET	/api/status/live	حالة Windows/Wi-Fi	Session	OK / adapter states
+GET	/api/wifi/scan	فحص BSSID حديث	Session	OK / WLAN errors
+GET	/api/wifi/saved	Profiles المحفوظة	Session	OK / PROFILE errors
+GET	/api/wifi/attempt/{id}	مرحلة ونتيجة نهائية	Session	DONE/FAILED/CANCELED
+POST	/api/wifi/connect-new	بيانات اعتماد جديدة	Session+CSRF	Verified statuses
+POST	/api/wifi/connect-saved	Profile محفوظ	Session+CSRF	Verified statuses
+POST	/api/wifi/cancel	إلغاء Attempt محدد	Session+CSRF	CANCELED
+POST	/api/credentials/reveal-token	رمز كشف مرة واحدة	Session+CSRF+Confirm	Token 30s
+POST	/api/credentials/reveal	كشف حساس	Session+CSRF+Token	No-store / no audit secret
+POST	/api/quality/run	Ping/DNS/Ports/Trace	Session+CSRF	Validated target
+GET	/api/devices/capabilities	Capabilities فعلية	Session	Read-only
+POST	/api/devices/target	إنشاء Target read-only	Session+CSRF	No fake auth
+POST	/api/devices/authenticate	مصادقة Provider	Session+CSRF	Verified or NOT_IMPLEMENTED
+GET	/api/monitor/sample	عينة متحققة	Session	null unavailable
+POST	/api/repair/run	إصلاح مؤكد	Session+CSRF+Confirm	Before/After verify
+POST	/api/system/shutdown	إغلاق منظم	Session+CSRF+Host nonce	202 accepted
+
+8. دورة Wi-Fi الموثوقة
+8.1 الاتصال ببيانات اعتماد جديدة
+7.	الحصول على Lock قبل إنشاء attemptId؛ إذا كان مشغولًا يعاد ATTEMPT_IN_PROGRESS.
+8.	التقاط Baseline: SSID/BSSID/Profile/IP وآخر WLAN EventRecordID.
+9.	فحص حديث وإثبات وجود SSID وجمع BSSIDs ونوع المصادقة والتشفير.
+10.	إنشاء XML عبر ElementTree، وProfile يدوي معزول _vortex_verify_<attemptId>.
+11.	بدء الاتصال ومراقبة Cancellation وWLAN events بعد baseline وعدم وجود AUTH_FAILED.
+12.	التحقق من Active Profile ثم SSID وBSSID وIPv4 غير APIPA وGateway.
+13.	إذا غاب حدث نجاح موثوق مع بقاء مؤشرات الاتصال، النتيجة UNVERIFIED_RESULT وليست نجاحًا.
+14.	ترقية محسوبة إلى Profile دائم، ثم إعادة التحقق؛ لا يُحذف Profile الاختبار قبل ثبوت الدائم.
+15.	في finally: تصفير XML كامل الحجم، flush، fsync، حذف الملف وProfile الاختبار، وتحرير Lock بواسطة المالك فقط.
+8.2 الاتصال بملف محفوظ
+•	مسار مستقل لا يستدعي Scan كشرط إلزامي، لدعم Hidden وEnterprise المحفوظة.
+•	لا ينشئ PSK ولا يعدل Profile المحفوظ.
+•	يتحقق من Active Profile وSSID وIP/Gateway، ويرجع UNVERIFIED_RESULT إذا تعذر إثبات المصادقة.
+•	Profile name لا يُفترض أنه يساوي SSID.
+9. Backup وRollback لـ Wi-Fi
+يُعامل الاستبدال النهائي لـ Profile كعملية Transaction ذات نقاط فشل واضحة.
+16.	لا Backup ولا Restore ما دام Profile الأصلي لم يتغير.
+17.	قبل تعديل الأصل: تصدير مناسب، تسجيل الحجم والبصمة وحماية الملف، وتحديد previousProfileModified=true.
+18.	بعد تثبيت الدائم: إثبات وجوده ونشاطه وتطابق SSID/BSSID وIPv4/Gateway.
+19.	عند الفشل: محاولة Restore مرة واحدة فقط إذا تغير الأصل.
+20.	إذا فشل أمر الاستعادة: RESTORE_FAILED. إذا نجح الأمر دون تحقق اتصال: RESTORE_NOT_VERIFIED.
+21.	rollbackAvailable يصبح true فقط إذا كانت آلية الاستعادة متاحة واختبارها المرتبط ناجحًا، وليس لمجرد وجود ملف.
+10. الأمن وإدارة الأسرار
+النطاق	القاعدة	اختبار القبول
+Vault	DPAPI فقط؛ لا fallback؛ fail closed	فشل DPAPI لا يكتب ملفًا بديلًا.
+Atomic writes	temp + flush + fsync + replace	انقطاع الكتابة لا يفسد الأصل.
+Sessions	SESSION_ONLY أو PERSIST_ENCRYPTED منفصلان عن الصلاحية	Summary بلا password.
+Redaction	Password/Passphrase/Key/Auth/Cookie/API/Session/CSRF	عينات اختبار لا يظهر منها السر.
+Reveal	Token مرة واحدة 30s وno-store	الاستهلاك الثاني يفشل.
+Clipboard	المسح فقط إذا بقيت الحافظة تحتوي السر نفسه	لا يمسح محتوى جديدًا للمستخدم.
+Temp XML	مسح كامل الحجم ثم حذف	لا يبقى XML أو Profile اختبار.
+Audit	كتابة ذرية وفشل ظاهر	خطأ الحفظ ينتج حالة قابلة للرؤية.
+
+11. Provider Registry والأجهزة الخارجية
+الدعم الحقيقي يتطلب Fingerprint + Authentication proof + Parser + Device Test. ما دون ذلك Read-only أو NOT_IMPLEMENTED.
+Provider	الإصدار الأول	شرط الترقية
+Generic Router	Reachability وPorts وHeaders فقط	لا إدارة.
+OpenWrt	Candidate integration	جهاز فعلي + ubus/rpcd موثق + Parser tests.
+MikroTik	Candidate integration	RouterOS version مثبت + REST/API test.
+TP-Link	Read-only fingerprint	موديل/Firmware وتوثيق API فعلي.
+Ubiquiti airOS	null لقياسات RF إن غابت جلسة موثقة	Device test على Firmware محدد.
+ONT Huawei/ZTE/Nokia	Reachability وISP profile فقط افتراضيًا	Parser موثق لموديل محدد.
+
+حظر ثابت
+لا تعديل LOID أو PLOAM أو Serial أو OMCI أو GEM أو T-CONT أو TR-069 أو OLT-managed values. ولا استنتاج O5/LOS/Optical Power/Temperature من Ping.
+
+12. التشخيص والإصلاح والمراقبة
+12.1 التشخيص
+•	طبقة Windows: Adapter, Driver, WlanSvc, IP, APIPA, Gateway, DNS, DHCP, Routes, Proxy, MTU, Errors, WLAN events, Firewall, VPN impact.
+•	طبقة Router/Gateway: Reachability ودليل من Provider موثق فقط.
+•	طبقة Nano/ONT: القيم غير المتاحة null، مع سبب ومصدر ووقت.
+12.2 الإصلاح ذو الثماني مراحل
+22.	Before snapshot
+23.	Validation
+24.	User confirmation
+25.	Execute
+26.	After snapshot
+27.	Verify expected effect
+28.	Audit
+29.	Rollback إذا كان فعليًا متاحًا
+Exit Code = 0 لا يكفي. Reset Winsock/TCP-IP يعاد UNVERIFIED_RESULT مع requiresRestart=true إلى أن يتم التحقق بعد إعادة التشغيل.
+12.3 Monitoring
+•	Router latency تقاس من Default Gateway نفسه.
+•	كل عينة: source, timestamp, metric, value, unit, verified, availabilityReason.
+•	الرسم يتجاهل null ولا يحولها إلى صفر.
+•	لا تُستخدم أي قيمة ثابتة للنانو أو ONT.
+13. الواجهة وتجربة المستخدم
+•	JavaScript ES5 فقط: لا let/const/arrow/optional chaining/NodeList.forEach.
+•	لا تركيب بيانات ديناميكية داخل onclick؛ بناء DOM آمن باستخدام textContent وaddEventListener.
+•	الصفحات: Dashboard، Windows، Wi-Fi، Saved Profiles، Quality، Router، NanoStation، ONT، Diagnostics، Repair، Monitoring، Audit، Settings.
+•	الحالات المرئية: Loading، Empty، Success، Failed، Unverified، NOT_IMPLEMENTED، Admin required، Confirmation required، Restart required.
+•	زر Capability=false مخفي أو معطل مع سبب واضح.
+•	نافذة Wi-Fi تعرض SSID وBSSID والإشارة والمصادقة والتشفير والمراحل والمدة ورمز الخطأ والتفاصيل المنقحة.
+14. التثبيت والتحديث والبناء
+30.	أمر صغير يقرأ Clipboard Raw، يرفض الفراغ وChat artifacts، يزيل Code fence الخارجي فقط، ويفك Entities بحد أقصى مضبوط دون إفساد Here-strings.
+31.	كتابة Install-Or-Update-VNC.ps1 بترميز UTF-8 دون BOM، ثم AST parse وطباعة الحجم وSHA-256 الكامل.
+32.	كشف التثبيت السابق قبل إنشاء الشجرة، ثم Backup verified قبل أي overwrite.
+33.	كشف Python 3.10+ رقميًا مع Timeout، دون تنزيل تلقائي.
+34.	كتابة الملفات وطباعة SHA-256 الكامل لكل ملف.
+35.	تشغيل PreBuild؛ عند أي فشل يتوقف البناء.
+36.	بناء EXE ثم PostBuild؛ لا تشغيل تلقائي عند أي فشل.
+37.	الحزمة تسمى AppBundle لا Portable ما دامت تعتمد على Python خارجي.
+15. استراتيجية الاختبارات
+PreBuild ID	الاختبار
+PRE-01	PowerShell AST = 0 errors
+PRE-02	Python >= 3.10
+PRE-03	py_compile لكل الملفات
+PRE-04	Import smoke لكل Module
+PRE-05	Schema validation للإعدادات
+PRE-06	DPAPI round-trip
+PRE-07	DPAPI failure is fail-closed
+PRE-08	Redaction matrix
+PRE-09	WLAN XML parse
+PRE-10	Temp profile name != SSID
+PRE-11	Attempt lock ownership
+PRE-12	Second request -> ATTEMPT_IN_PROGRESS
+PRE-13	Rollback flag semantics
+PRE-14	Backend startup + port file
+PRE-15	Health 200
+PRE-16	GET بدون Token = 403
+PRE-17	POST بدون CSRF = 403
+PRE-18	POST صحيح مع Token+CSRF
+PRE-19	Generic operations = NOT_IMPLEMENTED
+PRE-20	ONT/Nano no fake telemetry
+PRE-21	HTML/chat corruption scan
+PRE-22	Trial backend cleanup
+
+PostBuild ID	الاختبار
+POST-01	EXE exists and hash
+POST-02	EXE launches
+POST-03	Port file created
+POST-04	Health 200
+POST-05	Host displays frontend
+POST-06	Graceful shutdown
+POST-07	Port file removed
+POST-08	No child backend remains
+
+16. مراحل التنفيذ وبوابات الانتقال
+المرحلة	الهدف	المخرج	بوابة الانتقال
+0	تثبيت Baseline والمتطلبات	Inventory + decision log	اعتماد هذه الوثيقة
+1	Contracts وSchemas	Result/API/Config schemas	Schema tests ناجحة
+2	Installer وBackup	Manifest verified + Python detection	Fail-closed backup tests
+3	Core Security	DPAPI/Redaction/Audit/Atomic IO	كل Unit security pass
+4	TaskManager وProcess runner	Locks/Cancellation/Timeout/PID ownership	Concurrency tests pass
+5	Windows وWi-Fi	مساران مستقلان + profile transaction	Integration + device Wi-Fi tests
+6	API Server	Validation/Tokens/CSRF/Headers	API security suite
+7	Diagnostics وRepair	Evidence + 8-stage engine	Effect verification tests
+8	Provider Registry	Fingerprint/Capabilities	Unknown devices fail safe
+9	Router/Nano/ONT	Read-only baseline + candidates	Device tests لكل موديل
+10	Monitoring	Verified samples + null handling	No fake telemetry tests
+11	Frontend	ES5 secure DOM + capability UI	IE11 manual+automated checks
+12	C# Host	Lifecycle/stderr/shutdown	PostBuild process tests
+13	Packaging/Release	AppBundle + docs + hashes	Release checklist كامل
+
+17. مصفوفة التتبع المختصرة
+Requirement	المكوّن	اختبار القبول	الحالة
+REQ-SEC-001	credential_store.py	DPAPI unit	Rebuild Required
+REQ-INSTALL-002	Install-Or-Update-VNC.ps1	Backup manifest test	Planned
+REQ-WIFI-002	windows_network.py	Saved profile integration	Rebuild Required
+REQ-WIFI-004	windows_network.py	Wi-Fi device test	Pending Device Validation
+REQ-API-001	api_server.py	Localhost/token tests	Needs Validation
+REQ-DEVICE-001	provider_registry.py	NOT_IMPLEMENTED tests	Planned
+REQ-UI-001	frontend/js/*.js	IE11 lint + DOM test	Rebuild Required
+REQ-TEST-001	tests/*	Pre/Post build suite	Planned
+
+18. تعريف الإنجاز
+Definition of Done
+لا يعتبر أي قسم مكتملًا إلا بعد: نجاح Syntax وUnit وIntegration، عدم تسريب أسرار، عدم وجود بيانات وهمية، نجاح Cleanup، ظهور الأخطاء، نجاح Audit، توثيق NOT_IMPLEMENTED، وربط المتطلب باختبار قبول ناجح.
+
+19. سجل المخاطر
+الخطر	التأثير	المعالجة
+فقدان Profile صحيح	مرتفع	Profile مستقل + Backup transaction + restore validation
+بقاء Password في XML	مرتفع	Full-size wipe + fsync + delete + profile cleanup
+فساد Vault	مرتفع	Fail closed + atomic replace + preserve original
+تضارب المحاولات	مرتفع	Owned lock + attempt-scoped cancellation
+تسرب Tokens	مرتفع	No-store + redaction + memory-only + compare_digest
+قتل Python غير تابع	مرتفع	PID ownership فقط؛ منع process-name kill
+بيانات RF/PON وهمية	مرتفع	null + verified=false + source
+اختلاف Firmware	مرتفع	Provider pinning + device test per model/version
+عدم توافق IE11	متوسط	ES5 lint + manual QA؛ WebView2 future debt
+تشويه النص عبر المحادثة	مرتفع	AST + corruption scan + file-based delivery preferred
+
+20. القرارات المعتمدة للإصدار الأول
+•	Python خارجي 3.10+ مطلوب؛ لا تنزيل تلقائي.
+•	الحزمة AppBundle وليست Portable.
+•	IE11 WebBrowser يبقى في v2.0 مع تسجيله دينًا تقنيًا.
+•	عمليات تعديل أجهزة Router/Nano/ONT تبقى NOT_IMPLEMENTED حتى نجاح Device Tests.
+•	ONT provider افتراضي Read-only ولا يغيّر إعدادات OLT.
+•	كشف كلمة مرور Wi-Fi اختياري ويمكن تعطيله من settings، مع Token مرة واحدة.
+•	حد الطلب 64 KB.
+•	Graceful shutdown مهلة 5 ثوانٍ قبل القتل القسري للعملية التابعة فقط.
+21. أمر البدء التنفيذي
+الترتيب الصحيح الآن هو: اعتماد هذه الوثيقة، تثبيت Baseline للكود الحالي، ثم تنفيذ المراحل 1 إلى 13 بالترتيب. لا يبدأ تطوير Providers الخارجية قبل اكتمال Core Security وWindows/Wi-Fi وAPI واختباراتها.
+المراجع الداخلية
+•	الاعدادات الجديدة التي تخص الراوتر والنانو .txt
+•	النمط القديم.txt
+•	الجديد.txt
+•	التعديل.txt
+•	خريطة العمل.txt
+•	مستند نصي جديد.txt
+•	نص ملصق(7).txt
+ملاحظة: هذه الوثيقة تنظّم المتطلبات ولا تدعي تشغيل الاختبارات أو اكتمال الوظائف المشار إليها بوصفها Rebuild Required أو Planned أو Pending Device Validation.

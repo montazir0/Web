@@ -1,0 +1,220 @@
+VORTEX NETWORK CONTROL CENTER WEB
+الخريطة الهندسية النهائية لموقع ويب حقيقي
+جاهزة للإرسال إلى Build في Google AI Studio
+قرار معماري حاسم
+الموقع لا يدّعي إدارة Windows أو Wi-Fi أو الراوتر مباشرة من المتصفح. كل عملية محلية أو على شبكة خاصة تحتاج VNC Local Agent مثبتًا على جهاز المستخدم، أو تبقى Demo/Read-only/NOT_IMPLEMENTED. السحابة لا تحاول الاتصال بعناوين LAN الخاصة.
+
+المرجع الأساس: VNC_Final_Engineering_Roadmap_AR.docx
+الناتج المطلوب: Full-stack web application قابلة للمعاينة ثم النشر، مع React frontend وNode.js server runtime.
+ 
+1. الملخص التنفيذي
+تحول هذه الخريطة مشروع VNC من تطبيق سطح مكتب محلي إلى منصة ويب Full-stack، مع الإبقاء على مبدأ الصدق التقني. الواجهة السحابية تعرض الحساب والأجهزة والجلسات والتقارير، بينما تنفيذ عمليات Windows/Wi-Fi/LAN يتم حصراً من خلال Local Agent موثوق ومقترن بالحساب. عند غياب Agent لا تظهر نتائج وهمية ولا أزرار تنفيذ فعالة.
+المبدأ الحاكم
+Cloud UI لا تساوي Local Network Access. نجاح Ping سحابي لا يثبت حالة جهاز منزلي. لا تُعرض أي Telemetry إلا مع source وtimestamp وverified. الأوامر الحساسة تحتاج Capability + Consent + Agent online + signed job + post-verification.
+
+2. نطاق المنتج والنسخة الأولى
+النطاق	في الإصدار الأول	الحالة
+موقع عام	Landing، الميزات، الأمان، الأسئلة، تسجيل الدخول	مطلوب
+لوحة المستخدم	Dashboard، الأجهزة، الجلسات، Diagnostics، Monitoring، Audit، Settings	مطلوب
+الحساب	Google Sign-in عبر Firebase Authentication	مطلوب
+البيانات	Firestore لعناصر غير حساسة، مع قواعد وصول حسب المستخدم	مطلوب
+الأسرار	لا كلمات مرور أجهزة في المتصفح أو Firestore	إلزامي
+Local Agent	عقد pairing وheartbeat/jobs/results، مع Mock adapter للتطوير	واجهة حقيقية + تنفيذ لاحق إن لم يُرفق Agent
+Router/Nano/ONT	Read-only حسب Provider وAgent؛ غير المدعوم NOT_IMPLEMENTED	Fail closed
+Gemini	مساعد يشرح البيانات المتاحة فقط ولا ينفذ إصلاحًا تلقائيًا	اختياري مضبوط
+
+3. التصميم المعماري النهائي
+1.	React + TypeScript frontend داخل Google AI Studio Build.
+2.	Node.js/TypeScript server routes لجميع الأسرار وقواعد الأعمال واستدعاءات Gemini.
+3.	Firebase Authentication لتسجيل الدخول، وFirestore لتخزين الحسابات والأجهزة والوظائف والنتائج والسجل.
+4.	Local Agent على Windows يتصل Outbound فقط بالخادم، يرسل heartbeat ويسحب Jobs الموقعة ويرجع Results موقعة.
+5.	لا توجد اتصالات Inbound من السحابة إلى LAN، ولا تخزن السحابة كلمات مرور الراوتر/Wi-Fi.
+6.	كل Telemetry تحمل source=agent|provider|user|demo وverified وcapturedAt وexpiresAt.
+7.	Demo mode بياناته موسومة synthetic=true ولا يختلط بحسابات Production.
+4. ما يستطيع الموقع فعله وما لا يستطيع
+الفئة	السلوك الصحيح
+بدون Agent	إدارة الحساب، تصميم الأجهزة، إدخال ISP profile، عرض Demo موسوم، تقارير محفوظة، NOT_CONNECTED للعمليات المحلية.
+Agent Online	تنفيذ القدرات التي يعلنها Agent فقط، مع consent وjob state ونتيجة متحققة.
+Private LAN	لا يتصل بها Cloud Run مباشرة؛ Agent هو الوسيط الوحيد.
+Wi-Fi credentials	تبقى محليًا في Agent/Windows؛ لا تُرفع للسحابة.
+Router credentials	Session-only محليًا افتراضيًا؛ لا ترفع إلا إذا صُمم Vault مستقل ومشفّر طرفيًا في إصدار لاحق.
+ONT values	null إذا لم يثبت Provider الموثق القيمة.
+Repair	لا زر Execute دون preview للمخاطر والتأكيد وAgent capability وverification plan.
+
+5. تجربة المستخدم والصفحات
+الصفحة	المحتوى
+Public Landing	Hero، قيمة المنتج، How it works، Security، Supported/Not supported، CTA.
+Sign in	Google sign-in، الشروط، privacy notice.
+Onboarding	إنشاء Workspace شخصي، اختيار Demo أو Pair Agent.
+Dashboard	Agent online، الأجهزة، health cards، آخر jobs، تنبيهات موثقة.
+Agents	Pairing، heartbeat، version، capabilities، revoke.
+Devices	Router/Nano/ONT/Windows cards، source، discoveredAt، verified.
+Wi-Fi	Profiles وحالة Adapter من Agent؛ connect actions gated.
+Diagnostics	فحوص منظمة، evidence، severity، suggested action.
+Repairs	Preview، consent، execute، verify، rollback status.
+Monitoring	Charts تتجاهل null؛ time range؛ stale indicator.
+Audit	Immutable-style activity feed، filters، export.
+Settings	Profile، security، retention، AI assistant، delete data.
+
+6. نظام التصميم
+•	RTL عربي افتراضي مع English toggle، تصميم داكن احترافي مستلهم من الشبكات دون ازدحام.
+•	ألوان الحالات ثابتة: أخضر verified، كهرماني unverified/stale، أحمر failed/risk، رمادي unavailable.
+•	لا تستخدم Gauge أو نسبة مئوية إن لم توجد قيمة حقيقية.
+•	كل Card تعرض المصدر والوقت وحالة التحقق.
+•	Responsive من 320px، دعم keyboard، focus واضح، aria-live، contrast مناسب.
+•	Empty states تشرح لماذا لا توجد بيانات وكيفية Pair Agent، ولا تملأ الواجهة بأرقام تجريبية.
+7. نموذج البيانات
+Collection	الحقول الأساسية
+users	uid, displayName, locale, createdAt
+workspaces	ownerUid, name, plan, createdAt
+agents	agentId, ownerUid, publicKey, version, status, capabilities, lastSeenAt, revokedAt
+devices	deviceId UUID, ownerUid, agentId, type, hostAlias, vendor, model, firmware, verificationStatus
+telemetry	deviceId, metric, value|null, unit, source, verified, capturedAt, expiresAt
+jobs	jobId, ownerUid, agentId, operation, payloadRef, state, risk, consentAt, signature, createdAt
+jobResults	jobId, status, verified, evidence, technicalDetailsRedacted, finishedAt
+auditEvents	eventId, actor, action, target, status, redactedSummary, createdAt
+ispProfiles	ownerUid, fields with value/source/verified; no secret passwords
+
+8. حالات الوظائف والعقود
+حالات الوظائف الرسمية: AVAILABLE، AGENT_OFFLINE، CAPABILITY_MISSING، CONSENT_REQUIRED، RUNNING، VERIFIED_SUCCESS، FAILED، UNVERIFIED_RESULT، CANCELED، NOT_IMPLEMENTED، STALE_DATA.
+الحقل	التعريف
+ok	Boolean؛ true فقط للنجاح المتحقق أو القراءة الصحيحة.
+status	الحالة القياسية.
+verified	هل النتيجة مثبتة؟
+source	agent/provider/user/demo.
+operation	اسم العملية.
+deviceId	UUID ثابت؛ IP ليس هوية.
+jobId	معرف الوظيفة.
+risk	none/low/medium/high.
+confirmationRequired	Boolean.
+data	بيانات بلا أسرار.
+evidence	أدلة منظمة.
+technicalDetails	منقحة.
+timestamp	وقت الخادم.
+capturedAt	وقت القياس.
+expiresAt	وقت انتهاء صلاحية البيانات.
+
+9. API النهائي للموقع
+Method	Path	الحماية	الوظيفة
+GET	/api/health	عام	جاهزية الخادم فقط
+GET	/api/me	Auth	المستخدم وWorkspace
+POST	/api/agents/pairing-code	Auth+CSRF	رمز قصير one-time
+POST	/api/agents/pair	Agent signature	إكمال الاقتران وتسجيل public key
+POST	/api/agents/heartbeat	Agent auth	حالة وقدرات Agent
+GET	/api/agents	Auth	قائمة Agents
+POST	/api/agents/:id/revoke	Auth+CSRF+confirm	إلغاء Agent
+GET	/api/devices	Auth	أجهزة المستخدم فقط
+POST	/api/jobs	Auth+CSRF+consent	إنشاء Job بعد capability/risk checks
+GET	/api/jobs/:id	Auth	حالة Job
+POST	/api/agent/jobs/:id/claim	Agent auth	سحب Job مخصص
+POST	/api/agent/jobs/:id/result	Agent auth+signature	نتيجة منقحة وموقعة
+GET	/api/telemetry	Auth	قياسات مع stale/null semantics
+POST	/api/diagnostics/run	Auth+CSRF	Job تشخيص
+POST	/api/repairs/preview	Auth+CSRF	مخاطر وخطة تحقق
+POST	/api/repairs/execute	Auth+CSRF+explicit consent	Job إصلاح
+GET	/api/audit	Auth	سجل المستخدم
+POST	/api/ai/explain	Auth+rate limit	شرح بيانات موجودة فقط
+
+10. أمن الموقع
+النطاق	القاعدة
+Authentication	Firebase Auth؛ تحقق server-side من ID token.
+Authorization	كل استعلام يقيّد ownerUid؛ لا ثقة بمعرفات العميل.
+CSRF	SameSite cookies إن استُخدمت + CSRF token للعمليات المغيرة.
+XSS	React escaping؛ لا dangerouslySetInnerHTML إلا Sanitizer موثق.
+Secrets	GEMINI_API_KEY وأي سر server-side فقط في Secrets panel.
+Agent trust	Public-key pairing، nonce، timestamp، signature، replay protection.
+Data minimization	لا حفظ passwords/tokens/cookies/authorization في Firestore أو logs.
+Validation	Schemas مشتركة مثل Zod؛ رفض unknown fields في العمليات الحساسة.
+Rate limits	Login-sensitive، pairing، jobs، AI explain.
+Headers	CSP، frame-ancestors، nosniff، referrer policy، permissions policy.
+Audit	كل Job وConsent وRevoke يسجل، مع Redaction.
+Deletion	Delete account يمسح البيانات أو يجدول حذفًا موثقًا.
+
+11. Local Agent Contract
+مهم
+Google AI Studio يبني الموقع، لكنه لا يحول المتصفح إلى مدير Windows. يطلب من Build إنشاء Agent Contract وMock Agent Simulator فقط، ما لم يتم تزويده لاحقًا بكود Agent مستقل.
+
+•	Agent هو تطبيق مستقل خارج المتصفح، يعمل بصلاحيات المستخدم، ولا يفتح منفذًا عامًا.
+•	Pairing يعرض Code في الويب؛ Agent يرسله مع public key؛ الخادم يربطه بالمستخدم مرة واحدة.
+•	Heartbeat يعلن version وOS وcapabilities وlastSeenAt فقط.
+•	Job لا يُنفذ إذا capability غير موجودة أو التوقيع/nonce/expiry غير صالح.
+•	Payload الحساس لا يمر بالسحابة في v1؛ واجهة الويب تطلب العملية وAgent يتعامل محليًا مع Windows/Device session.
+•	النتيجة تتضمن evidence وverified، وتُمرر على Redaction قبل الإرسال.
+•	Mock Agent Simulator يسمح باختبار الواجهة بحالات success/failure/null، وكل بياناته synthetic=true.
+12. Gemini داخل الموقع
+•	الميزة اختيارية: Explain this result، Create safe checklist، Summarize audit.
+•	لا يُسمح للنموذج بإصدار ادعاء Telemetry غير موجود في البيانات.
+•	لا Tool execution مباشر من Gemini في الإصدار الأول.
+•	لا إرسال أسرار أو raw logs قبل Redaction.
+•	كل جواب AI يعرض تنبيه: تفسير مساعد وليس قياسًا جديدًا.
+•	الاستدعاء server-side فقط، مع rate limit وحدود حجم الإدخال.
+13. الاختبارات وبوابات الجودة
+المستوى	اختبارات القبول
+Unit	Schemas، Result contract، Redaction، capability gating، stale/null formatting.
+API Integration	Auth isolation، CSRF، ownerUid scope، rate limits، invalid payloads.
+Agent Contract	Pair/revoke، bad signature، replay، expired job، wrong agent.
+UI	RTL/LTR، responsive 320px، keyboard، empty/error/loading، null charts.
+Security	No client secrets، XSS probes، IDOR tests، Firestore rules emulator.
+E2E	Sign in → pair mock → device → diagnostic → job result → audit.
+Build	npm install/build/typecheck/lint/test.
+Deployment	health، auth flow، Firestore access، no secret in bundle.
+
+14. مراحل التنفيذ في Google AI Studio Build
+المرحلة	الهدف	بوابة الانتقال
+0	إنشاء المشروع React + TypeScript + Node	Build ناجح وصفحة Landing
+1	Design system + RTL + routing	كل الصفحات وحالاتها دون بيانات وهمية
+2	Firebase Auth + Firestore models/rules	عزل مستخدم كامل
+3	Server validation + result contract + audit	API tests ناجحة
+4	Agents pairing/heartbeat/revoke	Mock Agent يعمل
+5	Devices/Telemetry/Monitoring	null/stale/source صحيح
+6	Jobs/Diagnostics/Repairs	Consent + capability + state machine
+7	Gemini explain server route	لا أسرار ولا أفعال مباشرة
+8	Security hardening	IDOR/XSS/replay tests
+9	E2E + accessibility + responsive	بوابة الجودة مكتملة
+10	GitHub sync + Cloud Run publish	Release notes وrollback
+
+15. معايير الإنجاز النهائية
+•	لا توجد بيانات Demo غير موسومة synthetic=true.
+•	لا توجد API keys في client bundle.
+•	لا يستطيع مستخدم قراءة Agent/Device/Job لمستخدم آخر.
+•	لا يظهر زر عملية دون Capability وAgent online.
+•	لا نجاح دون verified evidence.
+•	Graceful error states لجميع الشبكات والـAPI.
+•	جميع الاختبارات والـbuild ناجحة.
+•	المشروع متزامن إلى GitHub قبل النشر.
+•	Cloud Run deployment يملك health check وخطة rollback.
+16. المحظورات
+•	عدم استخدام بيانات ثابتة على أنها حقيقية.
+•	عدم محاولة الوصول المباشر من الخادم إلى 192.168.x.x أو عناوين خاصة للمستخدم.
+•	عدم حفظ كلمات مرور Wi-Fi/Router/ONT في Firestore أو Local Storage.
+•	عدم وضع GEMINI_API_KEY في React أو أي متغير VITE_* مكشوف.
+•	عدم بناء أزرار apply/reboot/rollback قبل تنفيذ Agent capability واختبار جهاز فعلي.
+•	عدم إدخال Admin backdoor أو تعطيل قواعد Firestore للتسهيل.
+•	عدم استخدام dangerouslySetInnerHTML لعرض Logs أو AI output الخام.
+17. النص الرئيسي الجاهز للصق في Build
+Build a production-minded full-stack web application named “Vortex Network Control Center Web” using React + TypeScript for the client and Node.js + TypeScript server routes. The default UI language is Arabic RTL with an English toggle. Use a premium dark network-operations visual system, responsive down to 320px, keyboard accessible, with clear loading, empty, failed, unverified, stale, unavailable, and NOT_IMPLEMENTED states.
+
+Critical truth rule: a browser or Cloud Run service cannot directly manage the user’s Windows Wi-Fi or private LAN. Build a cloud dashboard plus a Local Agent contract. Never pretend the browser can scan Wi-Fi, read router RF metrics, or access private IPs. Without an online paired agent, local operations must return AGENT_OFFLINE or NOT_IMPLEMENTED. Provide a Mock Agent Simulator for development and mark every simulated value synthetic=true.
+
+Use Firebase Authentication with Google sign-in and Firestore with strict per-user ownership rules. Create collections for users, workspaces, agents, devices, telemetry, jobs, jobResults, auditEvents, and ispProfiles. Do not store Wi-Fi/router passwords, cookies, authorization headers, API keys, PLOAM, LOID, or device secrets in Firestore, browser storage, logs, or AI prompts.
+
+Implement these pages: public Landing, Sign in, Onboarding, Dashboard, Agents, Devices, Wi-Fi, Diagnostics, Repairs, Monitoring, Audit, and Settings. Every telemetry card must show source, verified status, capturedAt, and stale status. Missing metrics are null and charts skip null values.
+
+Implement server APIs for health, current user, agent pairing, agent heartbeat, agent revoke, devices, jobs, job claim/result, telemetry, diagnostics, repair preview/execute, audit, and AI explain. Validate inputs with shared schemas, enforce authentication and owner scope server-side, add CSRF protection for mutating browser requests, rate limits, security headers, redaction, replay protection, signed agent results, and no-store for sensitive responses.
+
+The Local Agent contract uses one-time pairing codes, public keys, nonces, timestamps, signatures, expiring jobs, capabilities, heartbeat, and explicit consent. Jobs use these states: QUEUED, CLAIMED, RUNNING, VERIFIED_SUCCESS, FAILED, UNVERIFIED_RESULT, CANCELED, EXPIRED, NOT_IMPLEMENTED. Do not implement direct remote device changes in v1. Router, NanoStation, and ONT modifications remain hidden and NOT_IMPLEMENTED until a tested provider and real device validation exist. Ping proves reachability only and never proves RSSI, CCQ, AirMAX, O5, LOS, optical power, or temperature.
+
+Add an optional server-side Gemini “Explain result” feature. It may summarize existing redacted evidence but must not generate new measurements or execute repairs. Keep GEMINI_API_KEY server-side only.
+
+Create automated unit, API integration, security, agent-contract, UI, and end-to-end tests. Add a README with setup, Firebase configuration, secrets, local development, test commands, GitHub sync, Cloud Run deployment, limitations, privacy model, and rollback steps. Do not stop after generating a visual prototype. Continue until npm install, typecheck, lint, tests, and production build pass. Show actual test and build results, and do not claim anything was verified unless it was executed successfully.
+18. تعليمات الإرسال إلى Build
+8.	افتح Google AI Studio ثم Build واختر Web app.
+9.	أرفق هذا الملف مع VNC_Final_Engineering_Roadmap_AR.docx.
+10.	الصق النص الرئيسي من القسم 17 واطلب تنفيذ المرحلة 0 ثم 1 فقط أولًا.
+11.	بعد نجاح build اطلب إكمال كل مرحلة منفردة مع عرض الملفات والاختبارات الفعلية.
+12.	لا تقبل عبارة “تم” دون عرض نتيجة build/test، ولا تنشر قبل بوابة المرحلة 9.
+13.	اربط GitHub قبل النشر النهائي وحافظ على commits لكل مرحلة.
+19. المراجع الرسمية
+•	Google AI Studio Build mode: يدعم تطبيقات ويب Full-stack، React افتراضيًا، وNode.js server runtime، وSecrets server-side، وFirebase Authentication/Firestore، وGitHub sync.
+•	Google AI Studio deployment: النشر يتم إلى Cloud Run، مع اختلاف متطلبات Starter Tier وStandard deployment.
+هذه الوثيقة لا تدعي أن Local Agent قد بُني أو أن وظائف الشبكة المحلية تعمل من المتصفح. إنها تحدد العقد الصادق الذي يمنع Build من اختراع هذه القدرات.
